@@ -2,20 +2,8 @@ syntax = "proto3";
 package Banking;
 
 service Bank {
-    rpc WithdrawMoney(WithdrawMoneyRequest) returns (WithdrawMoneyResponse) {}
-    rpc WithdrawMoneyStreaming(stream WithdrawMoneyRequest) returns (stream WithdrawMoneyResponse) {}
     rpc DepositMoney(DepositMoneyRequest) returns (DepositMoneyResponse) {}
     rpc DepositMoneyStreaming(stream DepositMoneyRequest) returns (stream DepositMoneyResponse) {}
-}
-
-message WithdrawMoneyRequest {
-    string user = 1;
-    int32 dollars = 2;
-}
-
-message WithdrawMoneyResponse {
-    string user = 1;
-    int32 dollars = 2;
 }
 
 message DepositMoneyRequest {

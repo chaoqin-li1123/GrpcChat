@@ -40,6 +40,7 @@ cc_binary(
 
 cc_library(
     name = "async_bank_server",
+    srcs = ["async_bank_server.cc"],
     hdrs = ["async_bank_server.h"],
     deps = [
         ":bank_cc_grpc",
