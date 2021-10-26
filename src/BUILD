@@ -20,11 +20,11 @@ cc_grpc_library(
 )
 
 cc_library(
-    name = "sync_bank_server",
-    srcs = ["sync_bank_server.cc"],
-    hdrs = ["sync_bank_server.h"],
+    name = "async_client",
+    hdrs = ["async_client.h"],
     deps = [
         ":bank_cc_grpc",
+        ":async_stream",
         "@com_github_grpc_grpc//:grpc++",
     ],
 )
@@ -33,17 +33,27 @@ cc_binary(
     name = "bank_client_main",
     srcs = ["bank_client_main.cc"],
     deps = [
+        ":async_client",
         ":bank_cc_grpc",
         "@com_github_grpc_grpc//:grpc++",
     ],
 )
 
 cc_library(
-    name = "async_bank_server",
-    srcs = ["async_bank_server.cc"],
-    hdrs = ["async_bank_server.h"],
+    name = "async_stream",
+    hdrs = ["async_stream.h"],
     deps = [
         ":bank_cc_grpc",
+        "@com_github_grpc_grpc//:grpc++",
+    ],
+)
+
+cc_library(
+    name = "async_server",
+    hdrs = ["async_server.h"],
+    deps = [
+        ":bank_cc_grpc",
+        ":async_stream",
         "@com_github_grpc_grpc//:grpc++",
     ],
 )
@@ -52,7 +62,6 @@ cc_binary(
     name = "bank_server_main",
     srcs = ["bank_server_main.cc"],
     deps = [
-        ":sync_bank_server",
-        ":async_bank_server",
+        ":async_server",
     ],
 )

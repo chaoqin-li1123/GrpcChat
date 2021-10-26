@@ -1,25 +1,32 @@
+#include <csignal>
 #include <memory>
 #include <string>
+#include <thread>
 
-#include "async_bank_server.h"
-#include "sync_bank_server.h"
+#include "async_server.h"
 
-void runSyncBankServer(std::string const& endpoint) {
-  SyncBankServiceImpl service;
-  grpc::ServerBuilder server_builder;
-  server_builder.AddListeningPort(endpoint, grpc::InsecureServerCredentials());
-  server_builder.RegisterService(&service);
-  std::unique_ptr<grpc::Server> server{server_builder.BuildAndStart()};
-  server->Wait();
+Banking::Bank::AsyncService service;
+AsyncServer<Banking::Bank::AsyncService, Banking::DepositMoneyRequest,
+            Banking::DepositMoneyResponse>* async_server;
+
+static void signalHandler(int signal_number) {
+  async_server->shutdown();
+  std::cerr << "server shutdown\n";
 }
 
 void runAsyncBankServer(std::string const& endpoint) {
-  AsyncBankServiceImpl service(endpoint);
+  async_server =
+      new AsyncServer<Banking::Bank::AsyncService, Banking::DepositMoneyRequest,
+                      Banking::DepositMoneyResponse>(endpoint, service);
+  async_server->run();
 }
 
 int main(int argc, char** argv) {
+  signal(SIGTERM, signalHandler);
+  signal(SIGINT, signalHandler);
   std::string ip{argv[1]};
   std::string port{argv[2]};
   std::string endpoint = ip + ":" + port;
+
   runAsyncBankServer(endpoint);
 }
