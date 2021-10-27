@@ -3,6 +3,7 @@
 #include <grpcpp/grpcpp.h>
 
 #include <iostream>
+#include <list>
 #include <memory>
 #include <string>
 
@@ -35,32 +36,58 @@ struct AsyncClientStream : public AsyncStream {
       }
     }
   }
+
   void onReadComplete() override {
-    std::cout << "read complete" << std::endl;
-    std::cout << response_.user() << std::endl;
+    std::cout << "read complete " << response_.user() << std::endl;
+    received_responses_.push_back(response_);
+    rw_->Read(&response_, &read_tag_);
   }
 
   void onInitComplete() override {
     std::cout << "init complete" << std::endl;
     request_.set_user("client");
-    rw_->Read(&response_, &read_tag_);
-    rw_->Write(request_, &write_tag_);
   }
 
   void onWriteComplete() override {
     std::cout << "write complete" << std::endl;
+    write_pending_ = false;
+    writePendingRequest();
   }
 
   void onFinishComplete() override {}
 
-  void sendRequest(Request& request) { rw_->Write(request, &write_tag_); }
+  void send(Request const& request) {
+    pending_requests_.push_back(request);
+    writePendingRequest();
+  }
+
+  std::unique_ptr<Response> receive() {
+    if (received_responses_.empty()) {
+      return nullptr;
+    }
+    Request response = received_responses_.front();
+    received_responses_.pop_front();
+    rw_->Read(&response_, &read_tag_);
+    return std::make_unique<Response>(move(response));
+  }
 
  private:
+  void writePendingRequest() {
+    if (write_pending_ || pending_requests_.empty()) return;
+    request_ = pending_requests_.front();
+    pending_requests_.pop_front();
+    rw_->Write(request_, &write_tag_);
+    write_pending_ = true;
+  }
+
   grpc::CompletionQueue cq_;
   grpc::ClientContext context_;
   std::shared_ptr<grpc::Channel> channel_;
   std::unique_ptr<ServiceStub> stub_;
   std::shared_ptr<grpc::ClientAsyncReaderWriter<Request, Response>> rw_;
+  bool write_pending_{false};
+  std::list<Response> received_responses_;
+  std::list<Request> pending_requests_;
   Response response_;
   Request request_;
   ActionTag<AsyncClientStream> init_tag_{this, Action::INIT};

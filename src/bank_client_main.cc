@@ -18,5 +18,5 @@ int main(int argc, char** argv) {
       async_client_stream(endpoint, Banking::Bank::NewStub(channel));
   Banking::DepositMoneyRequest request;
   request.set_user("ming");
-  async_client_stream.sendRequest(request);
+  async_client_stream.send(request);
 }

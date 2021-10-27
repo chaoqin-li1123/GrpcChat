@@ -5,6 +5,8 @@
 #include <cassert>
 #include <functional>
 #include <iostream>
+#include <list>
+#include <memory>
 #include <string>
 #include <unordered_map>
 
@@ -24,9 +26,10 @@ class AsyncServer {
         : server_(server), rw_(&server_context_) {
       init_callback(&server_context_, &rw_, server_.completion_queue_.get(),
                     &init_tag_);
+      response_.set_user("server");
+      response_.set_dollars(request_.dollars());
     }
 
-    ~AsyncServerStream() {}
     void onReadComplete() override {
       std::cout << "read complete" << std::endl;
       std::cout << request_.user() << std::endl;
@@ -35,10 +38,6 @@ class AsyncServer {
     void onInitComplete() override {
       started_ = true;
       std::cout << "init complete" << std::endl;
-      response_.set_user("server");
-      response_.set_dollars(request_.dollars());
-      rw_.Read(&request_, &read_tag_);
-      rw_.Write(response_, &write_tag_);
     }
 
     void onWriteComplete() override {
@@ -54,6 +53,18 @@ class AsyncServer {
       }
     }
 
+    void send(Response& response) { rw_.Write(response, &write_tag_); }
+
+    std::unique_ptr<Request> receive() {
+      if (received_requests_.empty()) {
+        return nullptr;
+      }
+      Request request = received_requests_.back();
+      received_requests_.pop_back();
+      rw_.Read(&request_, &read_tag_);
+      return std::make_unique<Request>(move(request));
+    }
+
    private:
     void deleteSelf() {
       for (auto it = server_.active_requests_.begin();
@@ -64,6 +75,7 @@ class AsyncServer {
         }
       }
     }
+    std::list<Request> received_requests_;
     Response response_;
     Request request_;
     grpc::ServerContext server_context_;
@@ -76,6 +88,7 @@ class AsyncServer {
     ActionTag<AsyncServerStream> write_tag_{this, Action::WRITE};
     ActionTag<AsyncServerStream> finish_tag_{this, Action::FINISH};
   };
+
   AsyncServer(const std::string& endpoint, Service& service)
       : service_(service) {
     server_builder_.AddListeningPort(endpoint,
@@ -91,7 +104,7 @@ class AsyncServer {
   }
 
   ~AsyncServer() {
-    server_->Shutdown();
+    server_->Shutdown(gpr_time_0(GPR_CLOCK_REALTIME));
     completion_queue_->Shutdown();
     void* tag;
     bool ok = false;
@@ -105,13 +118,7 @@ class AsyncServer {
       active_requests_.emplace_back(*this, init_callback_);
     }
 
-    while (!active_requests_.empty()) {
-      if (shutdown_) {
-        for (auto& stream : active_requests_) {
-          stream.localClose();
-        }
-        break;
-      }
+    while (!shutdown_) {
       void* tag;
       bool ok = false;
       bool has_new_event = completion_queue_->AsyncNext(
@@ -119,6 +126,9 @@ class AsyncServer {
       if (ok && has_new_event) {
         (static_cast<ActionTag<AsyncServerStream>*>(tag))->act();
       }
+    }
+    for (auto& stream : active_requests_) {
+      stream.localClose();
     }
     std::cerr << "exit main loop" << std::endl;
 
