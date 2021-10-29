@@ -28,33 +28,34 @@ struct AsyncClientStream : public AsyncStream {
     rw_->StartCall(&init_tag_);
     while (true) {
       void* tag;
-      bool ok = false;
-      bool has_new_event =
+      bool ok;
+      grpc::CompletionQueue::NextStatus status =
           cq_.AsyncNext(&tag, &ok, gpr_time_0(GPR_CLOCK_REALTIME));
-      if (ok && has_new_event) {
-        (static_cast<ActionTag<AsyncClientStream>*>(tag))->act();
+      if (status == grpc::CompletionQueue::NextStatus::GOT_EVENT && ok) {
+        (static_cast<ActionTag<AsyncClientStream>*>(tag))->act(ok);
       }
     }
   }
 
-  void onReadComplete() override {
+  void onReadComplete(bool ok) override {
     std::cout << "read complete " << response_.user() << std::endl;
     received_responses_.push_back(response_);
     rw_->Read(&response_, &read_tag_);
   }
 
-  void onInitComplete() override {
+  void onInitComplete(bool ok) override {
     std::cout << "init complete" << std::endl;
     request_.set_user("client");
+    send(request_);
   }
 
-  void onWriteComplete() override {
+  void onWriteComplete(bool ok) override {
     std::cout << "write complete" << std::endl;
     write_pending_ = false;
     writePendingRequest();
   }
 
-  void onFinishComplete() override {}
+  void onFinishComplete(bool ok) override {}
 
   void send(Request const& request) {
     pending_requests_.push_back(request);

@@ -26,67 +26,105 @@ class AsyncServer {
         : server_(server), rw_(&server_context_) {
       init_callback(&server_context_, &rw_, server_.completion_queue_.get(),
                     &init_tag_);
-      response_.set_user("server");
-      response_.set_dollars(request_.dollars());
     }
 
-    void onReadComplete() override {
+    void onReadComplete(bool ok) override {
       std::cout << "read complete" << std::endl;
-      std::cout << request_.user() << std::endl;
+      if (!ok) localClose();
+      if (!shutdown_) {
+        received_requests_.push_back(request_);
+        // Issue a new read after read complete.
+        rw_.Read(&request_, &read_tag_);
+        inflight_tags_++;
+      }
+      onCompleteOps();
     }
 
-    void onInitComplete() override {
+    void onInitComplete(bool ok) override {
       started_ = true;
+      if (!ok) localClose();
       std::cout << "init complete" << std::endl;
+      // Start reading.
+      if (!shutdown_) {
+        rw_.Read(&request_, &read_tag_);
+        inflight_tags_++;
+      }
+      onCompleteOps();
     }
 
-    void onWriteComplete() override {
+    void onWriteComplete(bool ok) override {
+      pending_responses_.pop_front();
+      if (!ok) localClose();
+      // send pending response.
+      if (!shutdown_) {
+        if (!pending_responses_.empty()) {
+          rw_.Write(pending_responses_.front(), &write_tag_);
+          inflight_tags_++;
+        }
+      }
+      onCompleteOps();
       std::cout << "write complete" << std::endl;
     }
 
-    void onFinishComplete() override { deleteSelf(); }
+    void onFinishComplete(bool ok) override { onCompleteOps(); }
 
     void localClose() {
+      std::cerr << "local close\n";
       shutdown_ = true;
       if (!shutdown_) {
         rw_.Finish(grpc::Status::OK, &finish_tag_);
+        inflight_tags_++;
       }
     }
 
-    void send(Response& response) { rw_.Write(response, &write_tag_); }
+    void send(Response& response) {
+      pending_responses_.push_back(response);
+      // Send immediately if don't have inflight response.
+      if (pending_responses_.size() == 1) {
+        rw_.Write(pending_responses_.front(), &write_tag_);
+        inflight_tags_++;
+      }
+    }
 
     std::unique_ptr<Request> receive() {
       if (received_requests_.empty()) {
         return nullptr;
       }
-      Request request = received_requests_.back();
-      received_requests_.pop_back();
-      rw_.Read(&request_, &read_tag_);
+      Request request = received_requests_.front();
+      received_requests_.pop_front();
       return std::make_unique<Request>(move(request));
     }
 
    private:
     void deleteSelf() {
-      for (auto it = server_.active_requests_.begin();
-           it != server_.active_requests_.end(); it++) {
+      for (auto it = server_.active_streams_.begin();
+           it != server_.active_streams_.end(); it++) {
         if (&(*it) == this) {
-          server_.active_requests_.erase(it);
+          server_.active_streams_.erase(it);
           break;
         }
       }
     }
+
+    void onCompleteOps() {
+      inflight_tags_--;
+      if (inflight_tags_ == 0 && shutdown_) deleteSelf();
+    }
+
     std::list<Request> received_requests_;
-    Response response_;
+    std::list<Response> pending_responses_;
     Request request_;
     grpc::ServerContext server_context_;
     AsyncServer& server_;
     grpc::ServerAsyncReaderWriter<Response, Request> rw_;
     bool started_{false};
+    bool write_pending_{false};
     bool shutdown_{false};
     ActionTag<AsyncServerStream> init_tag_{this, Action::INIT};
     ActionTag<AsyncServerStream> read_tag_{this, Action::READ};
     ActionTag<AsyncServerStream> write_tag_{this, Action::WRITE};
     ActionTag<AsyncServerStream> finish_tag_{this, Action::FINISH};
+    int inflight_tags_{0};
   };
 
   AsyncServer(const std::string& endpoint, Service& service)
@@ -115,23 +153,22 @@ class AsyncServer {
 
   void run() {
     for (size_t i = 0; i < REQUESTS_PER_QUEUE; i++) {
-      active_requests_.emplace_back(*this, init_callback_);
+      active_streams_.emplace_back(*this, init_callback_);
     }
 
     while (!shutdown_) {
       void* tag;
       bool ok = false;
-      bool has_new_event = completion_queue_->AsyncNext(
+      grpc::CompletionQueue::NextStatus status = completion_queue_->AsyncNext(
           &tag, &ok, gpr_time_0(GPR_CLOCK_REALTIME));
-      if (ok && has_new_event) {
-        (static_cast<ActionTag<AsyncServerStream>*>(tag))->act();
+      if (status == grpc::CompletionQueue::NextStatus::GOT_EVENT) {
+        (static_cast<ActionTag<AsyncServerStream>*>(tag))->act(ok);
       }
     }
-    for (auto& stream : active_requests_) {
+    for (auto& stream : active_streams_) {
       stream.localClose();
     }
     std::cerr << "exit main loop" << std::endl;
-
     delete this;
   }
 
@@ -142,7 +179,7 @@ class AsyncServer {
   grpc::ServerBuilder server_builder_;
   std::unique_ptr<grpc::ServerCompletionQueue> completion_queue_;
   std::unique_ptr<grpc::Server> server_;
-  std::list<AsyncServerStream> active_requests_;
+  std::list<AsyncServerStream> active_streams_;
   bool shutdown_{false};
   std::function<void(grpc::ServerContext*,
                      grpc::ServerAsyncReaderWriter<Response, Request>*,
