@@ -5,19 +5,18 @@
 
 #include "async_server.h"
 
-Banking::Bank::AsyncService service;
-AsyncServer<Banking::Bank::AsyncService, Banking::DepositMoneyRequest,
-            Banking::DepositMoneyResponse>* async_server;
+ChatService::AsyncService service;
+AsyncServer<ChatService::AsyncService, ChatMessage, ChatMessage>* async_server;
 
 static void signalHandler(int signal_number) {
   async_server->shutdown();
   std::cerr << "server shutdown\n";
 }
 
-void runAsyncBankServer(std::string const& endpoint) {
+void runAsyncChatServer(std::string const& endpoint) {
   async_server =
-      new AsyncServer<Banking::Bank::AsyncService, Banking::DepositMoneyRequest,
-                      Banking::DepositMoneyResponse>(endpoint, service);
+      new AsyncServer<ChatService::AsyncService, ChatMessage, ChatMessage>(
+          endpoint, service);
   async_server->run();
 }
 
@@ -28,5 +27,5 @@ int main(int argc, char** argv) {
   std::string port{argv[2]};
   std::string endpoint = ip + ":" + port;
 
-  runAsyncBankServer(endpoint);
+  runAsyncChatServer(endpoint);
 }

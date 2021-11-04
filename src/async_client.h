@@ -8,13 +8,13 @@
 #include <string>
 
 #include "async_stream.h"
-#include "src/bank.grpc.pb.h"
+#include "src/chat.grpc.pb.h"
 
 template <typename ServiceStub, typename Request, typename Response>
 struct AsyncClientStream : public AsyncStream {
   AsyncClientStream(std::string endpoint, std::unique_ptr<ServiceStub>&& stub)
       : stub_(std::move(stub)),
-        rw_(stub_->PrepareAsyncDepositMoneyStreaming(&context_, &cq_)) {
+        rw_(stub_->PrepareAsyncChatStreaming(&context_, &cq_)) {
     run();
   }
   ~AsyncClientStream() {

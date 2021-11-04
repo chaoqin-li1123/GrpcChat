@@ -11,7 +11,7 @@
 #include <unordered_map>
 
 #include "async_stream.h"
-#include "src/bank.grpc.pb.h"
+#include "src/chat.grpc.pb.h"
 
 template <typename Service, typename Request, typename Response>
 class AsyncServer {
@@ -137,7 +137,7 @@ class AsyncServer {
     init_callback_ = [&](grpc::ServerContext* context,
                          grpc::ServerAsyncReaderWriter<Response, Request>* rw,
                          grpc::ServerCompletionQueue* cq, void* tag) {
-      service_.RequestDepositMoneyStreaming(context, rw, cq, cq, tag);
+      service_.RequestChatStreaming(context, rw, cq, cq, tag);
     };
   }
 

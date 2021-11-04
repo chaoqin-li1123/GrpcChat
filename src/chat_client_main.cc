@@ -5,7 +5,7 @@
 #include <thread>
 
 #include "async_client.h"
-#include "src/bank.grpc.pb.h"
+#include "src/chat.grpc.pb.h"
 
 int main(int argc, char** argv) {
   std::string ip{argv[1]};
@@ -13,10 +13,9 @@ int main(int argc, char** argv) {
   std::string endpoint = ip + ":" + port;
   std::shared_ptr<grpc::Channel> channel =
       grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials());
-  AsyncClientStream<Banking::Bank::Stub, Banking::DepositMoneyRequest,
-                    Banking::DepositMoneyResponse>
-      async_client_stream(endpoint, Banking::Bank::NewStub(channel));
-  Banking::DepositMoneyRequest request;
+  AsyncClientStream<ChatService::Stub, ChatMessage, ChatMessage>
+      async_client_stream(endpoint, ChatService::NewStub(channel));
+  ChatMessage request;
   request.set_user("ming");
   async_client_stream.send(request);
 }
