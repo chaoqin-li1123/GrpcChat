@@ -10,8 +10,8 @@
 #include <string>
 #include <unordered_map>
 
+#include "api/chat.grpc.pb.h"
 #include "async_stream.h"
-#include "src/chat.grpc.pb.h"
 
 template <typename Service, typename Request, typename Response>
 class AsyncServer {

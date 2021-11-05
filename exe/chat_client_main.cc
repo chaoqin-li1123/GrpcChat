@@ -4,8 +4,8 @@
 #include <memory>
 #include <thread>
 
-#include "async_client.h"
-#include "src/chat.grpc.pb.h"
+#include "api/chat.grpc.pb.h"
+#include "src/async_client.h"
 
 int main(int argc, char** argv) {
   std::string ip{argv[1]};

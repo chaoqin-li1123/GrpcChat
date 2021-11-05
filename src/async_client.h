@@ -7,8 +7,8 @@
 #include <memory>
 #include <string>
 
+#include "api/chat.grpc.pb.h"
 #include "async_stream.h"
-#include "src/chat.grpc.pb.h"
 
 template <typename ServiceStub, typename Request, typename Response>
 struct AsyncClientStream : public AsyncStream {
