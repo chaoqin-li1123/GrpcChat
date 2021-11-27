@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+option go_package = "github.com/chaoqin-li1123/GrpcChat";
+
 service ChatService {
     rpc ChatStreaming(stream ChatMessage) returns (stream ChatMessage) {}
 }
